@@ -74,8 +74,7 @@ func pubKeyToAddress(seed []byte) {
 	key, _ = key.NewChildKey(uint32(0)) // 常规派生 对应 change
 	key, _ = key.NewChildKey(uint32(0)) // 常规派生 对应 address_index
 
-	fmt.Println("privKey:", key)
-	fmt.Println("privKey2:", key.String())
+	fmt.Println("privKey:", key.String())
 
 	// 将key转换为十六进制字符串
 	hexKey := fmt.Sprintf("%x", key.Key)
