@@ -18,7 +18,7 @@ import (
 
 // createPrivKeyAndAddress 生成加密货币私钥和地址。
 // 该函数首先生成一个随机私钥，然后从私钥派生出公钥和地址。
-func createPrivKeyAndAddress() {
+func GeneratePrivKey() {
 	// 生成随机私钥
 	privKey, _ := crypto.GenerateKey()
 	// 将私钥转换为字节序列

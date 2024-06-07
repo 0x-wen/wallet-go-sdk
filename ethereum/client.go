@@ -78,7 +78,7 @@ func transaction() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// 将签名后的数据通过clp编码为字节数组,前端eth_sendRawTransaction接口中params参数
+	// 将签名后的数据通过rlp编码为字节数组,前端eth_sendRawTransaction接口中params参数
 	encodedTx, err := rlp.EncodeToBytes(signedTx)
 	if err != nil {
 		log.Fatal(err)
