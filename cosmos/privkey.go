@@ -17,8 +17,8 @@ func createPrivKey() {
 	privKey := secp256k1.GenPrivKey()
 	fmt.Println("privKey:", hex.EncodeToString(privKey.Bytes()))
 
-	var privKeyBytes sdk.AccAddress = privKey.PubKey().Address().Bytes()
-	baseAccount := authtypes.NewBaseAccount(privKeyBytes, privKey.PubKey(), 0, 0)
+	var addrBytes sdk.AccAddress = privKey.PubKey().Address().Bytes()
+	baseAccount := authtypes.NewBaseAccount(addrBytes, privKey.PubKey(), 0, 0)
 
 	fmt.Println("address:", baseAccount.Address)
 }
