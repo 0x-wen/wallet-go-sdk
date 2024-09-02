@@ -17,7 +17,7 @@ func main() {
 
 // bip39Mnemonic 生成一个BIP39兼容的助记词。
 func bip39Mnemonic() (seed []byte) {
-	// 生成256位的随机熵，用于创建BIP39助记词。即 128 个 16 进制字符
+	// 生成随机熵，用于创建BIP39助记词。即 128 个 16 进制字符
 	entropy, _ := bip39.NewEntropy(128)
 	mnemonic, _ := bip39.NewMnemonic(entropy)
 	fmt.Println("助记词：", mnemonic)
