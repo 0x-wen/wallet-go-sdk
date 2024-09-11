@@ -86,6 +86,7 @@ func transaction() {
 	}
 	fmt.Println(txResp.TxResponse)
 }
+
 func BuildTxV2(chainId string, sequence, accountNumber uint64, privKey *secp256k1.PrivKey, fee sdk.Coin, gaslimit int64, msgs []sdk.Msg) (*typetx.TxRaw, error) {
 	txBodyMessage := make([]*types.Any, 0)
 	for i := 0; i < len(msgs); i++ {

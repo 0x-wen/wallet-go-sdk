@@ -3,9 +3,11 @@ package bitcoin
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -61,6 +63,38 @@ func NewBtcAddr(network *chaincfg.Params) (*BtcAddr, error) {
 	}, nil
 }
 
+func ImportPrivKey(privKeyHex string, network *chaincfg.Params) (*BtcAddr, error) {
+	privKeyBytes, err := hex.DecodeString(privKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	pk, pubk := btcec.PrivKeyFromBytes(privKeyBytes)
+	wif, err := btcutil.NewWIF(pk, network, true) // true 表示压缩公钥
+	if err != nil {
+		log.Fatalf("Error creating WIF: %v", err)
+	}
+
+	pubKeyHex := hex.EncodeToString(pubk.SerializeCompressed())
+	publicKey, err := hex.DecodeString(pubKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	addrMap, err := ConvertPubKeyToAddresses(publicKey, network)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BtcAddr{
+		PrivKey:    privKeyHex,
+		WIFPrivKey: wif.String(),
+		PubKey:     pubKeyHex,
+		P2PKH:      addrMap["P2PKH"],
+		P2SH:       addrMap["P2SH"],
+		P2WPKH:     addrMap["P2WPKH"],
+		P2TR:       addrMap["P2TR"],
+	}, nil
+}
+
 func ConvertPubKeyToAddresses(publicKey []byte, network *chaincfg.Params) (map[string]string, error) {
 	// 定义地址类型和对应的标识
 	addressTypes := map[string]string{
@@ -87,21 +121,21 @@ func PubKeyToAddr(publicKey []byte, addrType string, network *chaincfg.Params) (
 	if network == nil {
 		network = &chaincfg.MainNetParams
 	}
-	if addrType == LEGACY {
+
+	switch addrType {
+	case LEGACY:
 		p2pkh, err := btcutil.NewAddressPubKey(publicKey, network)
 		if err != nil {
 			return "", err
 		}
-
 		return p2pkh.EncodeAddress(), nil
-	} else if addrType == SEGWIT_NATIVE {
+	case SEGWIT_NATIVE:
 		p2wpkh, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(publicKey), network)
 		if err != nil {
 			return "", err
 		}
-
 		return p2wpkh.EncodeAddress(), nil
-	} else if addrType == SEGWIT_NESTED {
+	case SEGWIT_NESTED:
 		p2wpkh, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(publicKey), network)
 		if err != nil {
 			return "", err
@@ -114,9 +148,8 @@ func PubKeyToAddr(publicKey []byte, addrType string, network *chaincfg.Params) (
 		if err != nil {
 			return "", err
 		}
-
 		return p2sh.EncodeAddress(), nil
-	} else if addrType == TAPROOT {
+	case TAPROOT:
 		internalKey, err := btcec.ParsePubKey(publicKey)
 		if err != nil {
 			return "", err
@@ -126,8 +159,13 @@ func PubKeyToAddr(publicKey []byte, addrType string, network *chaincfg.Params) (
 			return "", err
 		}
 
+		taprootAddr, err := btcutil.NewAddressTaproot(schnorr.SerializePubKey(txscript.ComputeTaprootKeyNoScript(internalKey)), network)
+		if err != nil {
+			return "", err
+		}
+		fmt.Printf("p2tr: %s, taproot: %s", p2tr.EncodeAddress(), taprootAddr.EncodeAddress())
 		return p2tr.EncodeAddress(), nil
-	} else {
+	default:
 		return "", errors.New("address type not supported")
 	}
 }
@@ -154,7 +192,7 @@ func GeneartePrivKey(network *chaincfg.Params) (string, string, string, error) {
 type HDWallet struct {
 	mnemonic  string
 	masterKey string
-	childAddr BtcAddr
+	childAddr []*BtcAddr
 }
 
 func NewHDWallet(network *chaincfg.Params, mnemonic string, addrIndex uint32) (*HDWallet, error) {
@@ -170,7 +208,7 @@ func NewHDWallet(network *chaincfg.Params, mnemonic string, addrIndex uint32) (*
 		log.Fatalf("Unable to create master private key: %v", err)
 	}
 
-	// Derive according to BIP44 path m/44'/0'/0'/0/0
+	// Derive according to BIP44 path m/44'/0'/0'/0/0   HardenedKeyStart=2147483648
 	purposeIndex := hdkeychain.HardenedKeyStart + 44
 	coinTypeIndex := hdkeychain.HardenedKeyStart + 0 // Bitcoin
 	accountIndex := hdkeychain.HardenedKeyStart + 0  // Account 0
@@ -194,45 +232,48 @@ func NewHDWallet(network *chaincfg.Params, mnemonic string, addrIndex uint32) (*
 	if err != nil {
 		log.Fatalf("Unable to derive external chain key: %v", err)
 	}
-	childKey, err := externalKey.Derive(uint32(addressIndex))
-	if err != nil {
-		log.Fatalf("Unable to derive receive address key: %v", err)
-	}
 
-	// 获取子私钥
-	privKey, err := childKey.ECPrivKey()
-	if err != nil {
-		log.Fatalf("Unable to get private key: %v", err)
-	}
+	childAddrs := make([]*BtcAddr, 0, addressIndex)
+	for i := uint32(0); i <= addressIndex; i++ {
+		childKey, err := externalKey.Derive(uint32(i))
+		if err != nil {
+			log.Fatalf("Unable to derive receive address key: %v", err)
+		}
+		// 获取子私钥
+		privKey, err := childKey.ECPrivKey()
+		if err != nil {
+			log.Fatalf("Unable to get private key: %v", err)
+		}
+		// WIF编码的私钥
+		wif, err := btcutil.NewWIF(privKey, network, true) // true 表示压缩公钥
+		if err != nil {
+			log.Fatalf("Error creating WIF: %v", err)
+		}
 
-	// 创建一个新的WIF编码的私钥
-	wif, err := btcutil.NewWIF(privKey, network, true) // true 表示压缩公钥
-	if err != nil {
-		log.Fatalf("Error creating WIF: %v", err)
-	}
+		// 从私钥获取公钥
+		pubKey := privKey.PubKey().SerializeCompressed()
 
-	// 从私钥获取公钥
-	pubKey := privKey.PubKey().SerializeCompressed()
+		addrMap, err := ConvertPubKeyToAddresses(pubKey, network)
+		if err != nil {
+			return nil, err
+		}
 
-	addrMap, err := ConvertPubKeyToAddresses(pubKey, network)
-	if err != nil {
-		return nil, err
-	}
-
-	addr1 := BtcAddr{
-		PrivKey:    hex.EncodeToString(privKey.Serialize()),
-		WIFPrivKey: wif.String(),
-		PubKey:     hex.EncodeToString(pubKey),
-		P2PKH:      addrMap["P2PKH"],
-		P2SH:       addrMap["P2SH"],
-		P2WPKH:     addrMap["P2WPKH"],
-		P2TR:       addrMap["P2TR"],
+		btcAddr1 := BtcAddr{
+			PrivKey:    hex.EncodeToString(privKey.Serialize()),
+			WIFPrivKey: wif.String(),
+			PubKey:     hex.EncodeToString(pubKey),
+			P2PKH:      addrMap["P2PKH"],
+			P2SH:       addrMap["P2SH"],
+			P2WPKH:     addrMap["P2WPKH"],
+			P2TR:       addrMap["P2TR"],
+		}
+		childAddrs = append(childAddrs, &btcAddr1)
 	}
 
 	return &HDWallet{
 		mnemonic:  mnemonic,
 		masterKey: masterPrivKey.String(),
-		childAddr: addr1,
+		childAddr: childAddrs,
 	}, nil
 }
 

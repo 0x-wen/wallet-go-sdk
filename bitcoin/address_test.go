@@ -82,13 +82,49 @@ func TestNewHDWallet(t *testing.T) {
 		{"testNewHDWallet", args{MainNetParams, "", 0}, false},
 		{"testNewHDWallet", args{MainNetParams, "share mirror defy grief flower mosquito speak noise since trim mix behave", 0}, false},
 		{"testNewHDWallet", args{MainNetParams, "share mirror defy grief flower mosquito speak noise since trim mix behave", 1}, false},
-		{"testNewHDWallet", args{MainNetParams, "share mirror defy grief flower mosquito speak noise since trim mix behave", 1}, false},
+		{"testNewHDWallet", args{MainNetParams, "share mirror defy grief flower mosquito speak noise since trim mix behave", 5}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewHDWallet(tt.args.network, tt.args.mnemonic, tt.args.addrIndex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewHDWallet() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			fmt.Println("mnemonic:", got.mnemonic)
+			fmt.Println("masterKey:", got.masterKey)
+			if got.childAddr != nil {
+				for _, addr := range got.childAddr {
+					fmt.Println("privKey:", addr.PrivKey)
+					fmt.Println("1:", addr.P2PKH)
+					fmt.Println("3:", addr.P2SH)
+					fmt.Println("bc1:", addr.P2WPKH)
+					fmt.Println("taproot:", addr.P2TR)
+				}
+			}
+			
+		})
+	}
+}
+
+func TestImportPrivKey(t *testing.T) {
+	type args struct {
+		network    *chaincfg.Params
+		privKeyHex string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"test-import",
+			args{MainNetParams, "d6eddf72cb1f6853bbb6633286dd2a9ccb7e980a05c4b959ac005ed94cb8a6d8"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ImportPrivKey(tt.args.privKeyHex, tt.args.network)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ImportPrivKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			fmt.Println(got)
